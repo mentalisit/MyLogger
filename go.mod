@@ -1,6 +1,6 @@
 module github.com/mentalisit/logger
 
-go 1.21.7
+go 1.20
 
 require go.uber.org/zap v1.26.0
 
