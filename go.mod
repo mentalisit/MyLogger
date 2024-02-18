@@ -1,4 +1,4 @@
-module github.com/mentalisit/MyLogger
+module github.com/mentalisit/logger
 
 go 1.21.7
 
