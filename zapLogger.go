@@ -68,7 +68,7 @@ func LoggerZap(botToken string, chatID int64, webhookDS string) *Logger {
 	}
 
 	defer logger.Sync()
-	return &Logger{ZapLogger: logger} // LoggerInterface: logger}
+	return &Logger{ZapLogger: logger}
 }
 func LoggerZapDEV() *Logger {
 	cfg := zap.Config{
@@ -99,6 +99,95 @@ func LoggerZapDEV() *Logger {
 
 	logger.Info("Develop Running")
 
+	return &Logger{ZapLogger: logger}
+}
+
+func LoggerZapTelegram(botToken string, chatID int64) *Logger {
+	telegramWriter := NewTelegramWriter(botToken, chatID)
+
+	cfg := zap.Config{
+		Encoding:         "console",
+		Level:            zap.NewAtomicLevelAt(zap.DebugLevel),
+		OutputPaths:      []string{"stdout"},
+		ErrorOutputPaths: []string{"stderr"},
+		EncoderConfig: zapcore.EncoderConfig{
+			TimeKey:        "time",
+			LevelKey:       "level",
+			NameKey:        "logger",
+			CallerKey:      "caller",
+			MessageKey:     "message",
+			StacktraceKey:  "stacktrace",
+			LineEnding:     zapcore.DefaultLineEnding,
+			EncodeLevel:    zapcore.CapitalColorLevelEncoder,
+			EncodeTime:     zapcore.ISO8601TimeEncoder,
+			EncodeDuration: zapcore.SecondsDurationEncoder,
+			EncodeCaller:   zapcore.ShortCallerEncoder,
+		},
+	}
+	cfgNew := cfg.EncoderConfig
+	cfgNew.EncodeLevel = zapcore.CapitalLevelEncoder
+
+	logger, err := cfg.Build(
+		zap.WrapCore(func(core zapcore.Core) zapcore.Core {
+			return zapcore.NewTee(core, zapcore.NewCore(
+				zapcore.NewConsoleEncoder(cfgNew),
+				zapcore.AddSync(telegramWriter),
+				cfg.Level,
+			))
+		}),
+		zap.AddCallerSkip(1),
+	)
+
+	if err != nil {
+		fmt.Printf("Ошибка при создании логгера: %v\n", err)
+		return nil
+	}
+
+	defer logger.Sync()
+	return &Logger{ZapLogger: logger}
+}
+func LoggerZapDiscord(webhookDS string) *Logger {
+	discordWriter := NewDiscordWriter(webhookDS)
+
+	cfg := zap.Config{
+		Encoding:         "console",
+		Level:            zap.NewAtomicLevelAt(zap.DebugLevel),
+		OutputPaths:      []string{"stdout"},
+		ErrorOutputPaths: []string{"stderr"},
+		EncoderConfig: zapcore.EncoderConfig{
+			TimeKey:        "time",
+			LevelKey:       "level",
+			NameKey:        "logger",
+			CallerKey:      "caller",
+			MessageKey:     "message",
+			StacktraceKey:  "stacktrace",
+			LineEnding:     zapcore.DefaultLineEnding,
+			EncodeLevel:    zapcore.CapitalColorLevelEncoder,
+			EncodeTime:     zapcore.ISO8601TimeEncoder,
+			EncodeDuration: zapcore.SecondsDurationEncoder,
+			EncodeCaller:   zapcore.ShortCallerEncoder,
+		},
+	}
+	cfgNew := cfg.EncoderConfig
+	cfgNew.EncodeLevel = zapcore.CapitalLevelEncoder
+
+	logger, err := cfg.Build(
+		zap.WrapCore(func(core zapcore.Core) zapcore.Core {
+			return zapcore.NewTee(zapcore.NewCore(
+				zapcore.NewConsoleEncoder(cfgNew),
+				zapcore.AddSync(discordWriter),
+				cfg.Level,
+			))
+		}),
+		zap.AddCallerSkip(1),
+	)
+
+	if err != nil {
+		fmt.Printf("Ошибка при создании логгера: %v\n", err)
+		return nil
+	}
+
+	defer logger.Sync()
 	return &Logger{ZapLogger: logger}
 }
 
