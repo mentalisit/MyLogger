@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"os"
 	"time"
 )
 
@@ -11,7 +12,7 @@ type Logger struct {
 	ZapLogger *zap.Logger
 }
 
-func LoggerZap(botToken string, chatID int64, webhookDS string) *Logger {
+func LoggerZap(botToken string, chatID int64, webhookDS string, name ...string) *Logger {
 	telegramWriter := NewTelegramWriter(botToken, chatID)
 	discordWriter := NewDiscordWriter(webhookDS)
 
@@ -40,6 +41,12 @@ func LoggerZap(botToken string, chatID int64, webhookDS string) *Logger {
 			EncodeCaller:   zapcore.ShortCallerEncoder,
 		},
 	}
+	if len(name) > 0 {
+		cfg.InitialFields = map[string]interface{}{
+			"zoneName": name[0],
+		}
+	}
+
 	cfgNew := cfg.EncoderConfig
 	cfgNew.EncodeLevel = zapcore.CapitalLevelEncoder
 
@@ -102,7 +109,7 @@ func LoggerZapDEV() *Logger {
 	return &Logger{ZapLogger: logger}
 }
 
-func LoggerZapTelegram(botToken string, chatID int64) *Logger {
+func LoggerZapTelegram(botToken string, chatID int64, name ...string) *Logger {
 	telegramWriter := NewTelegramWriter(botToken, chatID)
 
 	cfg := zap.Config{
@@ -124,16 +131,19 @@ func LoggerZapTelegram(botToken string, chatID int64) *Logger {
 			EncodeCaller:   zapcore.ShortCallerEncoder,
 		},
 	}
+	if len(name) > 0 {
+		cfg.InitialFields = map[string]interface{}{
+			"zoneName": name[0],
+		}
+	}
+
 	cfgNew := cfg.EncoderConfig
 	cfgNew.EncodeLevel = zapcore.CapitalLevelEncoder
 
 	logger, err := cfg.Build(
 		zap.WrapCore(func(core zapcore.Core) zapcore.Core {
-			return zapcore.NewTee(core, zapcore.NewCore(
-				zapcore.NewConsoleEncoder(cfgNew),
-				zapcore.AddSync(telegramWriter),
-				cfg.Level,
-			))
+			return zapcore.NewTee(
+				core, zapcore.NewCore(zapcore.NewConsoleEncoder(cfgNew), zapcore.AddSync(telegramWriter), cfg.Level))
 		}),
 		zap.AddCallerSkip(1),
 	)
@@ -146,7 +156,7 @@ func LoggerZapTelegram(botToken string, chatID int64) *Logger {
 	defer logger.Sync()
 	return &Logger{ZapLogger: logger}
 }
-func LoggerZapDiscord(webhookDS string) *Logger {
+func LoggerZapDiscord(webhookDS string, name ...string) *Logger {
 	discordWriter := NewDiscordWriter(webhookDS)
 
 	cfg := zap.Config{
@@ -168,6 +178,13 @@ func LoggerZapDiscord(webhookDS string) *Logger {
 			EncodeCaller:   zapcore.ShortCallerEncoder,
 		},
 	}
+
+	if len(name) > 0 {
+		cfg.InitialFields = map[string]interface{}{
+			"zoneName": name[0],
+		}
+	}
+
 	cfgNew := cfg.EncoderConfig
 	cfgNew.EncodeLevel = zapcore.CapitalLevelEncoder
 
@@ -191,6 +208,59 @@ func LoggerZapDiscord(webhookDS string) *Logger {
 	return &Logger{ZapLogger: logger}
 }
 
+func LoggerZapTelegram1(botToken string, chatID int64, name ...string) *Logger {
+	// Создаем писатель для телеграма
+	telegramWriter := NewTelegramWriter(botToken, chatID)
+
+	// Настройки конфигурации логгера
+	cfg := zap.Config{
+		Level:            zap.NewAtomicLevelAt(zap.DebugLevel),
+		Encoding:         "console",
+		OutputPaths:      []string{"stdout"},
+		ErrorOutputPaths: []string{"stderr"},
+		EncoderConfig: zapcore.EncoderConfig{
+			TimeKey:        "time",
+			LevelKey:       "level",
+			NameKey:        "logger",
+			CallerKey:      "caller",
+			MessageKey:     "message",
+			StacktraceKey:  "stacktrace",
+			LineEnding:     zapcore.DefaultLineEnding,
+			EncodeLevel:    zapcore.CapitalColorLevelEncoder,
+			EncodeTime:     zapcore.ISO8601TimeEncoder,
+			EncodeDuration: zapcore.SecondsDurationEncoder,
+			EncodeCaller:   zapcore.ShortCallerEncoder,
+		},
+	}
+
+	// Добавляем имя, если оно передано в качестве аргумента
+	if len(name) > 0 {
+		cfg.InitialFields = map[string]interface{}{
+			"zoneName": name[0],
+		}
+	}
+
+	// Создаем конфигурацию кодировщика для логов в консоль
+	cfgNew := cfg.EncoderConfig
+	cfgNew.EncodeLevel = zapcore.CapitalLevelEncoder
+
+	// Создаем мульти-синкер для вывода логов в несколько мест
+	consoleOutput := zapcore.Lock(os.Stdout)
+	telegramOutput := zapcore.AddSync(telegramWriter)
+	multiOutput := zapcore.NewMultiWriteSyncer(consoleOutput, telegramOutput)
+
+	// Создаем ядро логгера
+	core := zapcore.NewCore(
+		zapcore.NewConsoleEncoder(cfgNew),
+		multiOutput,
+		cfg.Level,
+	)
+
+	// Создаем логгер
+	logger := zap.New(core, zap.AddCaller())
+
+	return &Logger{ZapLogger: logger}
+}
 func (l *Logger) ErrorErr(err error) {
 	l.ZapLogger.Error("Произошла ошибка", zap.Error(err))
 }
