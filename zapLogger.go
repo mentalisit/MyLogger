@@ -10,14 +10,15 @@ import (
 
 type Logger struct {
 	ZapLogger *zap.Logger
+	sName     string
 }
 
-func LoggerZap(botToken string, chatID int64, webhookDS string, name ...string) *Logger {
+func LoggerZap(botToken string, chatID int64, webhookDS string, serviceName string) *Logger {
 	telegramWriter := NewTelegramWriter(botToken, chatID)
 	discordWriter := NewDiscordWriter(webhookDS)
 
 	// Определяем имя файла с логами, включающее "log", дату и время
-	logFileName := fmt.Sprintf("log\\log_%s.log", time.Now().Format("2006-01-02_15-04-05"))
+	logFileName := fmt.Sprintf("docker\\log\\log_%s.log", time.Now().Format("2006-01-02_15-04-05"))
 
 	// Определяем WriteSyncer для файла
 	fileWriteSyncer := zapcore.AddSync(createLogFile(logFileName))
@@ -40,11 +41,6 @@ func LoggerZap(botToken string, chatID int64, webhookDS string, name ...string) 
 			EncodeDuration: zapcore.SecondsDurationEncoder,
 			EncodeCaller:   zapcore.ShortCallerEncoder,
 		},
-	}
-	if len(name) > 0 {
-		cfg.InitialFields = map[string]interface{}{
-			"zoneName": name[0],
-		}
 	}
 
 	cfgNew := cfg.EncoderConfig
@@ -75,7 +71,7 @@ func LoggerZap(botToken string, chatID int64, webhookDS string, name ...string) 
 	}
 
 	defer logger.Sync()
-	return &Logger{ZapLogger: logger}
+	return &Logger{ZapLogger: logger, sName: serviceName}
 }
 func LoggerZapDEV() *Logger {
 	cfg := zap.Config{
@@ -261,28 +257,29 @@ func LoggerZapTelegram1(botToken string, chatID int64, name ...string) *Logger {
 
 	return &Logger{ZapLogger: logger}
 }
+
 func (l *Logger) ErrorErr(err error) {
-	l.ZapLogger.Error("Произошла ошибка", zap.Error(err))
+	l.ZapLogger.Error(fmt.Sprintf("[%s] Произошла ошибка", l.sName), zap.Error(err))
 }
 func (l *Logger) Debug(s string, fields ...zap.Field) {
-	l.ZapLogger.Debug(s, fields...)
+	l.ZapLogger.Debug(fmt.Sprintf("[%s] %s\n", l.sName, s), fields...)
 }
 func (l *Logger) Info(s string, fields ...zap.Field) {
-	l.ZapLogger.Info(s, fields...)
+	l.ZapLogger.Info(fmt.Sprintf("[%s] %s\n", l.sName, s), fields...)
 }
 func (l *Logger) Warn(s string, fields ...zap.Field) {
-	l.ZapLogger.Warn(s, fields...)
+	l.ZapLogger.Warn(fmt.Sprintf("[%s] %s\n", l.sName, s), fields...)
 }
 func (l *Logger) Error(s string, fields ...zap.Field) {
-	l.ZapLogger.Error(s, fields...)
+	l.ZapLogger.Error(fmt.Sprintf("[%s] %s\n", l.sName, s), fields...)
 }
 func (l *Logger) Panic(s string, fields ...zap.Field) {
-	l.ZapLogger.Panic(s, fields...)
+	l.ZapLogger.Panic(fmt.Sprintf("[%s] %s\n", l.sName, s), fields...)
 }
 func (l *Logger) Fatal(s string, fields ...zap.Field) {
-	l.ZapLogger.Fatal(s, fields...)
+	l.ZapLogger.Fatal(fmt.Sprintf("[%s] %s\n", l.sName, s), fields...)
 }
 
 func (l *Logger) InfoStruct(s string, i interface{}, fields ...zap.Field) {
-	l.ZapLogger.Info(fmt.Sprintf("%s: %+v \n", s, i), fields...)
+	l.ZapLogger.Info(fmt.Sprintf("[%s] %s: %+v \n", l.sName, s, i), fields...)
 }
