@@ -18,7 +18,7 @@ func LoggerZap(botToken string, chatID int64, webhookDS string, serviceName stri
 	discordWriter := NewDiscordWriter(webhookDS)
 
 	// Определяем имя файла с логами, включающее "log", дату и время
-	logFileName := fmt.Sprintf("docker\\log\\log_%s.log", time.Now().Format("2006-01-02_15-04-05"))
+	logFileName := fmt.Sprintf("docker/log/log_%s_%s.log", serviceName, time.Now().Format("2006-01-02_15-04-05"))
 
 	// Определяем WriteSyncer для файла
 	fileWriteSyncer := zapcore.AddSync(createLogFile(logFileName))
