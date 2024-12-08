@@ -5,6 +5,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -36,7 +37,7 @@ func NewLogger(config LoggerConfig) *Logger {
 			zapcore.NewJSONEncoder(encoder),
 			zapcore.AddSync(NewDiscordWriter(config.DiscordWebhookURL)),
 			zap.InfoLevel, // Для Discord
-		)
+		))
 	}
 
 	// Логирование в Telegram, если указаны токен и chat_id
@@ -44,8 +45,8 @@ func NewLogger(config LoggerConfig) *Logger {
 		cores = append(cores, zapcore.NewCore(
 			zapcore.NewJSONEncoder(encoder),
 			zapcore.AddSync(&telegramWriter{
-				Token:  config.TelegramToken,
-				ChatID: config.TelegramChatID,
+				botToken:  config.TelegramToken,
+				chatID: config.TelegramChatID,
 			}),
 			zap.WarnLevel, // Для Telegram логирование с WarnLevel и выше
 		))
