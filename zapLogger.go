@@ -203,3 +203,6 @@ func (l *Logger) InfoStruct(s string, i interface{}, fields ...zap.Field) {
 func (l *Logger) DebugStruct(s string, i interface{}, fields ...zap.Field) {
 	l.ZapLogger.Debug(fmt.Sprintf("[%s] %s: %+v \n", l.sName, s, i), fields...)
 }
+func (l *Logger) DStruct(i interface{}, fields ...zap.Field) {
+	l.ZapLogger.Debug(fmt.Sprintf("[%s]: %+v \n", l.sName, i), fields...)
+}
