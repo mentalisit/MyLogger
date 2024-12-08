@@ -5,7 +5,6 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"os"
-	"path/filepath"
 	"time"
 )
 
@@ -53,26 +52,9 @@ func NewLogger(config LoggerConfig) *Logger {
 	}
 
 	// Логирование в файл
-	// Если параметры не указаны, задаем значения по умолчанию
-	if config.LogFilePath == "" {
-		// Путь к файлу логов по умолчанию (текущая директория)
-		config.LogFilePath = "app.log"
-	}
-	// Создаем директорию, если её нет
-	logDir := filepath.Dir(config.LogFilePath)
-	if err := os.MkdirAll(logDir, os.ModePerm); err != nil {
-		fmt.Printf("failed to create log directory: %s\n", err.Error())
-	}
-
-	//Открываем или создаем файл для записи логов
-	logFile, err := os.OpenFile(config.LogFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-	if err != nil {
-		fmt.Printf("failed to open log file: %s\n", err.Error())
-	}
-
 	cores = append(cores, zapcore.NewCore(
 		zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
-		zapcore.AddSync(logFile),
+		zapcore.AddSync(createLogFile(config.LogFilePath)),
 		zap.InfoLevel,
 	))
 
@@ -217,4 +199,7 @@ func (l *Logger) Fatal(s string, fields ...zap.Field) {
 
 func (l *Logger) InfoStruct(s string, i interface{}, fields ...zap.Field) {
 	l.ZapLogger.Info(fmt.Sprintf("[%s] %s: %+v \n", l.sName, s, i), fields...)
+}
+func (l *Logger) DebugStruct(s string, i interface{}, fields ...zap.Field) {
+	l.ZapLogger.Debug(fmt.Sprintf("[%s] %s: %+v \n", l.sName, s, i), fields...)
 }
