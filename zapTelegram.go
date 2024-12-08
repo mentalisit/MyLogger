@@ -21,14 +21,13 @@ func NewTelegramWriter(botToken string, chatID int64) *telegramWriter {
 
 func (t *telegramWriter) Write(p []byte) (n int, err error) {
 	message := string(p)
-	err = sendTelegramMessage(t.botToken, t.chatID, message)
-	if err != nil {
-		return 0, err
-	}
+	
+	go sendTelegramMessage(t.botToken, t.chatID, message)
+	
 	return len(p), nil
 }
 
-func sendTelegramMessage(token, chatID, message string) error {
+func sendTelegramMessage(token, chatID, message string) {
 	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", token)
 
 	params := map[string]string{
@@ -44,13 +43,11 @@ func sendTelegramMessage(token, chatID, message string) error {
 
 	resp, err := http.Post(apiURL, "application/x-www-form-urlencoded", bytes.NewBufferString(bodyStr))
 	if err != nil {
-		return fmt.Errorf("ошибка при отправке запроса: %v", err)
+		fmt.Printf("ошибка при отправке запроса: %v", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("неправильный статус ответа: %s", resp.Status)
+		fmt.Printf("неправильный статус ответа: %s", resp.Status)
 	}
-
-	return nil
 }

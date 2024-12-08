@@ -6,28 +6,24 @@ import (
 )
 
 // createLogFile создает файл с логами и возвращает его FileWriteSyncer
-func createLogFile(fileName string) *os.File {
-	err := ensureLogDir()
-	if err != nil {
-		fmt.Println(err)
-		return nil
+func createLogFile(filePathLog string) *os.File {
+	// Логирование в файл
+	// Если параметры не указаны, задаем значения по умолчанию
+	if filePathLog == "" {
+		// Путь к файлу логов по умолчанию (текущая директория)
+		filePathLog = "app.log"
 	}
-	file, err := os.OpenFile(fileName, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-	if err != nil {
-		panic("Не удалось создать файл с логами: " + err.Error())
+	// Создаем директорию, если её нет
+	logDir := filepath.Dir(filePathLog)
+	if err := os.MkdirAll(logDir, os.ModePerm); err != nil {
+		fmt.Printf("failed to create log directory: %s\n", err.Error())
 	}
-	return file
-}
 
-// ensureLogDir создает директорию "log", если она не существует
-func ensureLogDir() error {
-	logDir := "log"
-	if _, err := os.Stat(logDir); os.IsNotExist(err) {
-		// Создаем директорию
-		if err := os.Mkdir(logDir, os.ModePerm); err != nil {
-			return fmt.Errorf("ошибка при создании директории: %v", err)
-		}
-		fmt.Printf("Директория %s успешно создана\n", logDir)
+	//Открываем или создаем файл для записи логов
+	logFile, err := os.OpenFile(filePathLog, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		fmt.Printf("failed to open log file: %s\n", err.Error())
 	}
-	return nil
+	
+	return logFile
 }

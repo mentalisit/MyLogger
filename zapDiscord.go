@@ -8,16 +8,16 @@ import (
 )
 
 type discordWriter struct {
-	webhook string
+	WebhookURL string
 }
 
-func NewDiscordWriter(webhook string) *discordWriter {
-	return &discordWriter{webhook: webhook}
+func NewDiscordWriter(WebhookURL string) *discordWriter {
+	return &discordWriter{WebhookURL: WebhookURL}
 }
 
 func (t *discordWriter) Write(p []byte) (n int, err error) {
 	message := string(p)
-	sendDiscordMessage(t.webhook, message)
+	go sendDiscordMessage(t.WebhookURL, message)
 
 	return len(p), nil
 }

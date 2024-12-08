@@ -12,6 +12,92 @@ type Logger struct {
 	ZapLogger *zap.Logger
 	sName     string
 }
+type LoggerConfig struct {
+	DiscordWebhookURL string // URL веб хука Discord
+	TelegramChatID    string // ID чата Telegram, куда отправляются логи
+	TelegramToken     string // Токен Telegram бота
+	LogFilePath       string // Путь к файлу для записи логов
+	ServiceName       string
+}
+
+
+// NewLogger создает новый логгер на основе zap с учетом настроек для Discord и Telegram.
+func NewLogger(config LoggerConfig) *Logger {
+
+	var cores []zapcore.Core
+
+	encoder := zap.NewProductionEncoderConfig()
+	encoder.EncodeTime = zapcore.TimeEncoderOfLayout("2006-01-02 15:04:05")
+	encoder.TimeKey = "time"
+
+	// Логирование в Discord, если URL вебхука указан
+	if config.DiscordWebhookURL != "" {
+		cores = append(cores, zapcore.NewCore(
+			zapcore.NewJSONEncoder(encoder),
+			zapcore.AddSync(NewDiscordWriter(config.DiscordWebhookURL)),
+			zap.InfoLevel, // Для Discord
+		)
+	}
+
+	// Логирование в Telegram, если указаны токен и chat_id
+	if config.TelegramChatID != "" && config.TelegramToken != "" {
+		cores = append(cores, zapcore.NewCore(
+			zapcore.NewJSONEncoder(encoder),
+			zapcore.AddSync(&telegramWriter{
+				Token:  config.TelegramToken,
+				ChatID: config.TelegramChatID,
+			}),
+			zap.WarnLevel, // Для Telegram логирование с WarnLevel и выше
+		))
+	}
+
+	// Логирование в файл
+	// Если параметры не указаны, задаем значения по умолчанию
+	if config.LogFilePath == "" {
+		// Путь к файлу логов по умолчанию (текущая директория)
+		config.LogFilePath = "app.log"
+	}
+	// Создаем директорию, если её нет
+	logDir := filepath.Dir(config.LogFilePath)
+	if err := os.MkdirAll(logDir, os.ModePerm); err != nil {
+		fmt.Printf("failed to create log directory: %s\n", err.Error())
+	}
+
+	//Открываем или создаем файл для записи логов
+	logFile, err := os.OpenFile(config.LogFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		fmt.Printf("failed to open log file: %s\n", err.Error())
+	}
+
+	cores = append(cores, zapcore.NewCore(
+		zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
+		zapcore.AddSync(logFile),
+		zap.InfoLevel,
+	))
+
+	encoder.EncodeLevel = zapcore.CapitalColorLevelEncoder
+
+	// Логирование в консоль
+	cores = append(cores, zapcore.NewCore(
+		zapcore.NewConsoleEncoder(encoder),
+		zapcore.AddSync(os.Stdout),
+		zap.InfoLevel,
+	))
+
+	// Создаем логгер с добавленными компонентами
+	core := zapcore.NewTee(cores...)
+	logger := zap.New(core, zap.AddCaller(), zap.AddCallerSkip(1))
+
+	return &Logger{ZapLogger: logger, sName: config.ServiceName}
+}
+
+func (l *Logger) Shutdown() {
+	err := l.ZapLogger.Sync()
+	if err != nil {
+		l.ZapLogger.Error(err.Error())
+	}
+}
+
 
 func LoggerZap(botToken string, chatID int64, webhookDS string, serviceName string) *Logger {
 	telegramWriter := NewTelegramWriter(botToken, chatID)
@@ -105,158 +191,6 @@ func LoggerZapDEV() *Logger {
 	return &Logger{ZapLogger: logger}
 }
 
-func LoggerZapTelegram(botToken string, chatID int64, name ...string) *Logger {
-	telegramWriter := NewTelegramWriter(botToken, chatID)
-
-	cfg := zap.Config{
-		Encoding:         "console",
-		Level:            zap.NewAtomicLevelAt(zap.DebugLevel),
-		OutputPaths:      []string{"stdout"},
-		ErrorOutputPaths: []string{"stderr"},
-		EncoderConfig: zapcore.EncoderConfig{
-			TimeKey:        "time",
-			LevelKey:       "level",
-			NameKey:        "logger",
-			CallerKey:      "caller",
-			MessageKey:     "message",
-			StacktraceKey:  "stacktrace",
-			LineEnding:     zapcore.DefaultLineEnding,
-			EncodeLevel:    zapcore.CapitalColorLevelEncoder,
-			EncodeTime:     zapcore.ISO8601TimeEncoder,
-			EncodeDuration: zapcore.SecondsDurationEncoder,
-			EncodeCaller:   zapcore.ShortCallerEncoder,
-		},
-	}
-	if len(name) > 0 {
-		cfg.InitialFields = map[string]interface{}{
-			"zoneName": name[0],
-		}
-	}
-
-	cfgNew := cfg.EncoderConfig
-	cfgNew.EncodeLevel = zapcore.CapitalLevelEncoder
-
-	logger, err := cfg.Build(
-		zap.WrapCore(func(core zapcore.Core) zapcore.Core {
-			return zapcore.NewTee(
-				core, zapcore.NewCore(zapcore.NewConsoleEncoder(cfgNew), zapcore.AddSync(telegramWriter), cfg.Level))
-		}),
-		zap.AddCallerSkip(1),
-	)
-
-	if err != nil {
-		fmt.Printf("Ошибка при создании логгера: %v\n", err)
-		return nil
-	}
-
-	defer logger.Sync()
-	return &Logger{ZapLogger: logger}
-}
-func LoggerZapDiscord(webhookDS string, name ...string) *Logger {
-	discordWriter := NewDiscordWriter(webhookDS)
-
-	cfg := zap.Config{
-		Encoding:         "console",
-		Level:            zap.NewAtomicLevelAt(zap.DebugLevel),
-		OutputPaths:      []string{"stdout"},
-		ErrorOutputPaths: []string{"stderr"},
-		EncoderConfig: zapcore.EncoderConfig{
-			TimeKey:        "time",
-			LevelKey:       "level",
-			NameKey:        "logger",
-			CallerKey:      "caller",
-			MessageKey:     "message",
-			StacktraceKey:  "stacktrace",
-			LineEnding:     zapcore.DefaultLineEnding,
-			EncodeLevel:    zapcore.CapitalColorLevelEncoder,
-			EncodeTime:     zapcore.ISO8601TimeEncoder,
-			EncodeDuration: zapcore.SecondsDurationEncoder,
-			EncodeCaller:   zapcore.ShortCallerEncoder,
-		},
-	}
-
-	if len(name) > 0 {
-		cfg.InitialFields = map[string]interface{}{
-			"zoneName": name[0],
-		}
-	}
-
-	cfgNew := cfg.EncoderConfig
-	cfgNew.EncodeLevel = zapcore.CapitalLevelEncoder
-
-	logger, err := cfg.Build(
-		zap.WrapCore(func(core zapcore.Core) zapcore.Core {
-			return zapcore.NewTee(zapcore.NewCore(
-				zapcore.NewConsoleEncoder(cfgNew),
-				zapcore.AddSync(discordWriter),
-				cfg.Level,
-			))
-		}),
-		zap.AddCallerSkip(1),
-	)
-
-	if err != nil {
-		fmt.Printf("Ошибка при создании логгера: %v\n", err)
-		return nil
-	}
-
-	defer logger.Sync()
-	return &Logger{ZapLogger: logger}
-}
-
-func LoggerZapTelegram1(botToken string, chatID int64, name ...string) *Logger {
-	// Создаем писатель для телеграма
-	telegramWriter := NewTelegramWriter(botToken, chatID)
-
-	// Настройки конфигурации логгера
-	cfg := zap.Config{
-		Level:            zap.NewAtomicLevelAt(zap.DebugLevel),
-		Encoding:         "console",
-		OutputPaths:      []string{"stdout"},
-		ErrorOutputPaths: []string{"stderr"},
-		EncoderConfig: zapcore.EncoderConfig{
-			TimeKey:        "time",
-			LevelKey:       "level",
-			NameKey:        "logger",
-			CallerKey:      "caller",
-			MessageKey:     "message",
-			StacktraceKey:  "stacktrace",
-			LineEnding:     zapcore.DefaultLineEnding,
-			EncodeLevel:    zapcore.CapitalColorLevelEncoder,
-			EncodeTime:     zapcore.ISO8601TimeEncoder,
-			EncodeDuration: zapcore.SecondsDurationEncoder,
-			EncodeCaller:   zapcore.ShortCallerEncoder,
-		},
-	}
-
-	// Добавляем имя, если оно передано в качестве аргумента
-	if len(name) > 0 {
-		cfg.InitialFields = map[string]interface{}{
-			"zoneName": name[0],
-		}
-	}
-
-	// Создаем конфигурацию кодировщика для логов в консоль
-	cfgNew := cfg.EncoderConfig
-	cfgNew.EncodeLevel = zapcore.CapitalLevelEncoder
-
-	// Создаем мульти-синкер для вывода логов в несколько мест
-	consoleOutput := zapcore.Lock(os.Stdout)
-	telegramOutput := zapcore.AddSync(telegramWriter)
-	multiOutput := zapcore.NewMultiWriteSyncer(consoleOutput, telegramOutput)
-
-	// Создаем ядро логгера
-	core := zapcore.NewCore(
-		zapcore.NewConsoleEncoder(cfgNew),
-		multiOutput,
-		cfg.Level,
-	)
-
-	// Создаем логгер
-	logger := zap.New(core, zap.AddCaller())
-
-	return &Logger{ZapLogger: logger}
-}
 
 func (l *Logger) ErrorErr(err error) {
 	l.ZapLogger.Error(fmt.Sprintf("[%s] Произошла ошибка", l.sName), zap.Error(err))
